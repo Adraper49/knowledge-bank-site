@@ -1,11 +1,10 @@
-import "./globals.css";
+// BEGIN FILE: C:\KB\Web\knowledge-bank-site\src\app\layout.tsx
 import type { Metadata } from "next";
-import React from "react";
+import "./globals.css";
 
 export const metadata: Metadata = {
   title: "Knowledge Bank",
-  description:
-    "Your AI operating system for engines, apps, and universes.",
+  description: "Your AI operating system for engines, apps, and universes.",
 };
 
 export default function RootLayout({
@@ -19,3 +18,4 @@ export default function RootLayout({
     </html>
   );
 }
+// END FILE

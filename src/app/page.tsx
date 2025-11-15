@@ -1,9 +1,13 @@
 // BEGIN FILE: C:\KB\Web\knowledge-bank-site\src\app\page.tsx
 "use client";
 
-import React from "react";
+import type { FormEvent } from "react";
 
 export default function Home() {
+  const handleSubmit = (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+  };
+
   return (
     <main className="min-h-screen">
       {/* Top nav */}
@@ -242,10 +246,7 @@ export default function Home() {
             email or Supabase for waitlists, collabs, or white-label engines.
           </p>
 
-          <form
-            className="mt-5 max-w-md space-y-3"
-            onSubmit={(e) => e.preventDefault()}
-          >
+          <form className="mt-5 max-w-md space-y-3" onSubmit={handleSubmit}>
             <div>
               <label
                 htmlFor="name"
@@ -312,4 +313,4 @@ export default function Home() {
     </main>
   );
 }
-// END FILE: C:\KB\Web\knowledge-bank-site\src\app\page.tsx
+// END FILE
