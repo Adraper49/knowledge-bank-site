@@ -1,18 +1,34 @@
+// BEGIN FILE: C:\KB\Web\knowledge-bank-site\src\app\parlay-pilot\page.tsx
 "use client";
 
-import React, { useState } from "react";
-import {
-  Activity,
-  ArrowRight,
-  BarChart3,
-  ShieldCheck,
-  Ticket,
-  TrendingUp,
-} from "lucide-react";
+import React, { useEffect, useState } from "react";
 
-type RiskPreset = "safe" | "standard" | "aggro";
+type ProfitEngineTicketLeg = {
+  game_id: string;
+  game_label: string;
+  market: string;
+  selection: string;
+  price: string;
+  implied_prob_pct: number;
+  model_prob_pct: number;
+  edge_pct: number;
+};
 
-interface ProfitEngineResultSummary {
+type ProfitEngineTicket = {
+  ticket_id: string;
+  label: string;
+  risk_tier: string;
+  kelly_fraction: number;
+  stake_suggestion_units: number;
+  payout_odds: string;
+  model_win_prob_pct: number;
+  implied_win_prob_pct: number;
+  edge_pct: number;
+  confidence_label: string;
+  legs: ProfitEngineTicketLeg[];
+};
+
+type ProfitEngineSummary = {
   league: string;
   season: number;
   week: number;
@@ -22,590 +38,430 @@ interface ProfitEngineResultSummary {
   avg_edge_pct: number;
   max_edge_pct: number;
   num_tickets: number;
-  risk_preset: RiskPreset;
-}
+  risk_preset: string;
+};
 
-interface ProfitEngineTicketLeg {
-  game_id: string;
-  game_label: string;
-  market: string;
-  selection: string;
-  price: string;
-  implied_prob_pct: number;
-  model_prob_pct: number;
-  edge_pct: number;
-}
-
-interface ProfitEngineTicket {
-  ticket_id: string;
-  label: string;
-  risk_tier: RiskPreset | "standard";
-  kelly_fraction: number;
-  stake_suggestion_units: number;
-  payout_odds: string;
-  model_win_prob_pct: number;
-  implied_win_prob_pct: number;
-  edge_pct: number;
-  confidence_label: string;
-  legs: ProfitEngineTicketLeg[];
-}
-
-interface ProfitEngineResultEnvelope {
-  version: string;
-  engine: string;
+type ProfitEngineEnvelope = {
   job_id: string;
-  source: string;
+  status: string;
   created_at: string;
   completed_at: string;
-  status: "queued" | "running" | "done" | "error" | "cancelled";
-  summary: ProfitEngineResultSummary;
+  summary: ProfitEngineSummary;
   tickets: ProfitEngineTicket[];
-  meta?: {
-    notes?: string;
-    engine_version?: string;
-  };
-}
-
-// Sample result envelope – mirrors docs/profit-engine-result-envelope-v1.json
-const sampleResult: ProfitEngineResultEnvelope = {
-  version: "profit-engine-result-v1",
-  engine: "profit-engine",
-  job_id: "SAMPLE-JOB-ID-REPLACE-ME",
-  source: "profit-engine/worker",
-  created_at: "2025-11-16T02:30:00Z",
-  completed_at: "2025-11-16T02:31:45Z",
-  status: "done",
-  summary: {
-    league: "NFL",
-    season: 2025,
-    week: 1,
-    num_games: 16,
-    num_sims: 50000,
-    hit_rate_pct: 61.3,
-    avg_edge_pct: 3.2,
-    max_edge_pct: 8.7,
-    num_tickets: 5,
-    risk_preset: "standard",
-  },
-  tickets: [
-    {
-      ticket_id: "TCK-0001",
-      label: "Safe 3-leg",
-      risk_tier: "safe",
-      kelly_fraction: 0.02,
-      stake_suggestion_units: 1.0,
-      payout_odds: "+275",
-      model_win_prob_pct: 56.4,
-      implied_win_prob_pct: 26.7,
-      edge_pct: 29.7,
-      confidence_label: "A-Play",
-      legs: [
-        {
-          game_id: "2025-01-12-PHI-DAL",
-          game_label: "PHI @ DAL",
-          market: "spread",
-          selection: "PHI -3.5",
-          price: "-110",
-          implied_prob_pct: 52.4,
-          model_prob_pct: 58.0,
-          edge_pct: 5.6,
-        },
-        {
-          game_id: "2025-01-12-KC-LV",
-          game_label: "KC @ LV",
-          market: "total",
-          selection: "Over 47.5",
-          price: "-105",
-          implied_prob_pct: 51.2,
-          model_prob_pct: 55.5,
-          edge_pct: 4.3,
-        },
-        {
-          game_id: "2025-01-12-GB-CHI",
-          game_label: "GB @ CHI",
-          market: "moneyline",
-          selection: "GB ML",
-          price: "+120",
-          implied_prob_pct: 45.5,
-          model_prob_pct: 51.0,
-          edge_pct: 5.5,
-        },
-      ],
-    },
-    {
-      ticket_id: "TCK-0002",
-      label: "Standard 4-leg",
-      risk_tier: "standard",
-      kelly_fraction: 0.03,
-      stake_suggestion_units: 0.75,
-      payout_odds: "+750",
-      model_win_prob_pct: 24.1,
-      implied_win_prob_pct: 11.8,
-      edge_pct: 12.3,
-      confidence_label: "B-Play",
-      legs: [],
-    },
-  ],
-  meta: {
-    notes: "Sample result envelope for Parlay Pilot UI wiring.",
-    engine_version: "stub-2025-11-16",
-  },
-};
-
-const riskPresetLabels: Record<RiskPreset, string> = {
-  safe: "Safe",
-  standard: "Standard",
-  aggro: "Aggro",
-};
-
-const riskPresetDescriptions: Record<RiskPreset, string> = {
-  safe: "Lower variance, higher win-rate focus.",
-  standard: "Balanced risk vs reward.",
-  aggro: "High upside, accepts more volatility.",
 };
 
 export default function ParlayPilotPage() {
-  const [riskPreset, setRiskPreset] = useState<RiskPreset>(
-    sampleResult.summary.risk_preset,
-  );
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  // Form state
+  const [league, setLeague] = useState("NFL");
+  const [season, setSeason] = useState("2025");
+  const [week, setWeek] = useState("1");
+  const [riskPreset, setRiskPreset] = useState("standard");
+  const [numSims, setNumSims] = useState("50000");
+
+  // App state
+  const [envelope, setEnvelope] = useState<ProfitEngineEnvelope | null>(null);
   const [lastJobId, setLastJobId] = useState<string | null>(null);
-  const [lastJobStatus, setLastJobStatus] = useState<string | null>(null);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isLoadingResults, setIsLoadingResults] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const result = sampleResult;
-  const summary = result.summary;
-  const tickets = result.tickets;
+  const tickets = envelope?.tickets ?? [];
+  const summary = envelope?.summary;
 
-  async function handleRunSim() {
+  async function fetchLatestResults() {
+    setIsLoadingResults(true);
+    setError(null);
+
     try {
-      setIsSubmitting(true);
-      setErrorMessage(null);
+      const resp = await fetch("/api/profit-engine/results", {
+        method: "GET",
+        cache: "no-store",
+      });
 
-      const body = {
+      const data = await resp.json();
+
+      if (!resp.ok || !data?.ok) {
+        throw new Error(data?.message || "Failed to load results");
+      }
+
+      setEnvelope(data.envelope as ProfitEngineEnvelope);
+    } catch (err: any) {
+      console.error("Error loading results:", err);
+      setError(err?.message || "Error loading results");
+    } finally {
+      setIsLoadingResults(false);
+    }
+  }
+
+  useEffect(() => {
+    // On first load, try to pull the most recent stubbed result
+    fetchLatestResults().catch(() => {});
+  }, []);
+
+  async function handleRunSimulation(
+    event: React.FormEvent<HTMLFormElement>
+  ) {
+    event.preventDefault();
+    setIsSubmitting(true);
+    setError(null);
+
+    try {
+      const payload = {
         engine: "profit-engine",
         job: {
           type: "sim_week",
-          league: summary.league,
-          season: summary.season,
-          week: summary.week,
+          league,
+          season: Number(season) || 2025,
+          week: Number(week) || 1,
           risk_preset: riskPreset,
           preset: "nfl-default",
           settings: {
-            num_simulations: summary.num_sims,
+            num_simulations: Number(numSims) || 50000,
             max_legs: 4,
-            min_edge_pct: summary.avg_edge_pct,
-            max_tickets: summary.num_tickets,
+            min_edge_pct: 1.5,
+            max_tickets: 20,
           },
-          tags: ["parlay-pilot", "sim", "ui"],
-          meta: {
-            notes: "Queued from Parlay Pilot UI header button",
-          },
+          tags: ["parlay-pilot", "sim", "kb-ui"],
         },
       };
 
-      const res = await fetch("/api/profit-engine", {
+      const resp = await fetch("/api/profit-engine", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
+        body: JSON.stringify(payload),
       });
 
-      if (!res.ok) {
-        const text = await res.text();
-        throw new Error(`API error ${res.status}: ${text}`);
+      const data = await resp.json();
+
+      if (!resp.ok || !data?.ok) {
+        throw new Error(data?.message || "Failed to submit job");
       }
 
-      const data = await res.json();
       setLastJobId(data.job_id ?? null);
-      setLastJobStatus(data.status ?? "queued");
-    } catch (err: unknown) {
-      const msg =
-        err instanceof Error ? err.message : "Unknown error queuing job.";
-      setErrorMessage(msg);
+
+      // Immediately pull the latest result the worker wrote
+      await fetchLatestResults();
+    } catch (err: any) {
+      console.error("Error submitting job:", err);
+      setError(err?.message || "Something went wrong submitting the job");
     } finally {
       setIsSubmitting(false);
     }
   }
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-50">
-      <div className="border-b border-slate-800 bg-slate-950/80 backdrop-blur">
-        <header className="mx-auto flex max-w-6xl items-center justify-between px-4 py-4">
-          <div className="space-y-1">
-            <div className="inline-flex items-center gap-2 rounded-full border border-emerald-500/40 bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-200">
-              <ShieldCheck className="h-3 w-3" />
-              <span>Profit Engine · Stub</span>
-            </div>
-            <div className="flex flex-wrap items-baseline gap-2">
-              <h1 className="text-2xl font-semibold tracking-tight">
-                Parlay Pilot
-              </h1>
-              <span className="rounded-full bg-slate-900 px-2.5 py-0.5 text-xs text-slate-300">
-                {summary.league} · {summary.season} · Week {summary.week}
-              </span>
-            </div>
-            <p className="text-sm text-slate-400">
-              Preview how Profit Engine sends back sim results and curated
-              parlay tickets. Live engine wiring comes next.
-            </p>
-          </div>
-
-          <div className="hidden items-center gap-3 md:flex">
-            <div className="flex items-center gap-2 rounded-full border border-slate-800 bg-slate-900/70 px-3 py-1.5 text-xs text-slate-300">
-              <Activity className="h-3.5 w-3.5 text-emerald-400" />
-              <span>
-                Hit rate{" "}
-                <span className="font-semibold text-slate-100">
-                  {summary.hit_rate_pct.toFixed(1)}%
-                </span>
-              </span>
-            </div>
-            <button
-              type="button"
-              onClick={handleRunSim}
-              disabled={isSubmitting}
-              className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500 px-3 py-1.5 text-xs font-semibold text-emerald-950 shadow-lg shadow-emerald-500/30 hover:bg-emerald-400 disabled:cursor-not-allowed disabled:bg-emerald-500/60"
-            >
-              {isSubmitting ? "Queuing..." : "Run new sim"}
-              <ArrowRight
-                className={`h-3 w-3 ${
-                  isSubmitting ? "opacity-60" : ""
-                }`}
-              />
-            </button>
-          </div>
+    <main className="min-h-screen bg-slate-950 text-slate-50">
+      <div className="mx-auto max-w-6xl px-4 py-8 space-y-8">
+        {/* Header */}
+        <header className="space-y-2">
+          <p className="text-xs uppercase tracking-[0.3em] text-slate-400">
+            KB · Hobby Lines
+          </p>
+          <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">
+            Parlay Pilot <span className="text-sky-400">/ Profit Engine</span>
+          </h1>
+          <p className="max-w-2xl text-sm text-slate-400">
+            Queue a simulation week into Profit Engine and pull back pre-built
+            tickets for your NFL card. This view is wired to the local KB queue
+            and worker stub.
+          </p>
         </header>
-      </div>
 
-      <main className="mx-auto flex max-w-6xl flex-col gap-6 px-4 py-6 md:flex-row">
-        {/* LEFT: Controls & risk presets */}
-        <section className="w-full space-y-4 md:w-80">
-          <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4 shadow-lg shadow-slate-950/40">
-            <div className="mb-3 flex items-center justify-between gap-2">
-              <div>
-                <h2 className="text-sm font-semibold text-slate-100">
-                  Risk presets
-                </h2>
-                <p className="text-xs text-slate-400">
-                  Tell the pilot how aggressive to fly this slate.
-                </p>
-              </div>
-              <BarChart3 className="h-4 w-4 text-slate-400" />
-            </div>
-
-            <div className="grid grid-cols-3 gap-2">
-              {(["safe", "standard", "aggro"] as RiskPreset[]).map((preset) => {
-                const active = riskPreset === preset;
-                return (
-                  <button
-                    key={preset}
-                    type="button"
-                    onClick={() => setRiskPreset(preset)}
-                    className={[
-                      "flex h-16 flex-col items-start justify-center rounded-xl border px-2.5 py-1.5 text-left text-xs transition",
-                      active
-                        ? "border-emerald-400/80 bg-emerald-500/20 text-emerald-50 shadow shadow-emerald-500/30"
-                        : "border-slate-800 bg-slate-900/60 text-slate-300 hover:border-slate-700 hover:bg-slate-900",
-                    ].join(" ")}
-                  >
-                    <span className="font-semibold">
-                      {riskPresetLabels[preset]}
-                    </span>
-                    <span className="mt-0.5 line-clamp-2 text-[0.65rem] text-slate-400">
-                      {riskPresetDescriptions[preset]}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4 text-xs text-slate-400 shadow-lg shadow-slate-950/40">
-            <div className="mb-2 flex items-center gap-2 text-slate-200">
-              <Ticket className="h-4 w-4 text-emerald-400" />
-              <h2 className="text-sm font-semibold">Coach lane (coming)</h2>
-            </div>
-            <p className="mb-2">
-              This is where the coach bot will sit: explaining why each ticket
-              was chosen, showing alternatives, and warning you about bankroll
-              risk before you press send.
-            </p>
-            <p className="text-[0.7rem] text-slate-500">
-              For now, we&apos;re just rendering sample data from the
-              Profit&nbsp;Engine result envelope.
-            </p>
-          </div>
-
-          <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-3 text-[0.7rem] text-slate-500">
-            <p>
-              Parlay Pilot is a{" "}
-              <span className="font-semibold text-slate-300">
-                research &amp; simulation tool
-              </span>
-              . It is not financial advice and does not place bets.
-            </p>
-          </div>
-        </section>
-
-        {/* RIGHT: Sim summary + recommended tickets */}
-        <section className="flex-1 space-y-4">
-          {/* Sim summary card */}
-          <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4 md:p-5 shadow-lg shadow-slate-950/40">
-            <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
-              <div className="space-y-1">
-                <div className="inline-flex items-center gap-2 rounded-full bg-slate-900 px-2.5 py-1 text-[0.65rem] text-slate-300">
-                  <TrendingUp className="h-3 w-3 text-emerald-400" />
-                  <span>Sim summary</span>
-                  <span className="h-1 w-1 rounded-full bg-emerald-400" />
-                  <span>
-                    {summary.num_sims.toLocaleString()} simulations ·{" "}
-                    {summary.num_games} games
-                  </span>
-                </div>
-                <p className="text-xs text-slate-400">
-                  This is the kind of payload Profit Engine returns after it
-                  crunches a slate.
-                </p>
-              </div>
-
-              <div className="flex flex-col items-end gap-1 text-right text-xs">
-                <span className="text-slate-400">
-                  Job status:{" "}
-                  <span className="font-semibold text-emerald-400">
-                    {result.status}
-                  </span>
+        <section className="grid gap-6 md:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
+          {/* Control panel */}
+          <form
+            onSubmit={handleRunSimulation}
+            className="space-y-4 rounded-2xl border border-slate-800 bg-slate-900/70 p-4"
+          >
+            <div className="flex items-center justify-between gap-4">
+              <h2 className="text-sm font-medium text-slate-100">
+                Simulation controls
+              </h2>
+              {lastJobId && (
+                <span className="rounded-full bg-slate-800 px-3 py-1 text-[11px] text-slate-300">
+                  Last job: {lastJobId.slice(0, 8)}…
                 </span>
-                {lastJobId && (
-                  <span className="text-[0.65rem] text-slate-500">
-                    Last queued job:{" "}
-                    <span className="font-mono text-slate-200">
-                      {lastJobId}
-                    </span>{" "}
-                    ({lastJobStatus ?? "queued"})
-                  </span>
-                )}
-                {errorMessage && (
-                  <span className="text-[0.65rem] text-rose-400">
-                    {errorMessage}
-                  </span>
-                )}
-                <span className="text-[0.65rem] text-slate-500">
-                  Engine version: {result.meta?.engine_version ?? "unknown"}
+              )}
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 text-sm">
+              {/* League */}
+              <label className="space-y-1">
+                <span className="text-xs text-slate-400">League</span>
+                <select
+                  className="w-full rounded-lg border border-slate-700 bg-slate-950/60 px-2 py-1.5 text-sm outline-none focus:border-sky-500"
+                  value={league}
+                  onChange={(e) => setLeague(e.target.value)}
+                >
+                  <option value="NFL">NFL</option>
+                </select>
+              </label>
+
+              {/* Season */}
+              <label className="space-y-1">
+                <span className="text-xs text-slate-400">Season</span>
+                <input
+                  type="number"
+                  className="w-full rounded-lg border border-slate-700 bg-slate-950/60 px-2 py-1.5 text-sm outline-none focus:border-sky-500"
+                  value={season}
+                  onChange={(e) => setSeason(e.target.value)}
+                />
+              </label>
+
+              {/* Week */}
+              <label className="space-y-1">
+                <span className="text-xs text-slate-400">Week</span>
+                <input
+                  type="number"
+                  min={1}
+                  max={22}
+                  className="w-full rounded-lg border border-slate-700 bg-slate-950/60 px-2 py-1.5 text-sm outline-none focus:border-sky-500"
+                  value={week}
+                  onChange={(e) => setWeek(e.target.value)}
+                />
+              </label>
+
+              {/* Risk preset */}
+              <label className="space-y-1">
+                <span className="text-xs text-slate-400">Risk preset</span>
+                <select
+                  className="w-full rounded-lg border border-slate-700 bg-slate-950/60 px-2 py-1.5 text-sm outline-none focus:border-sky-500"
+                  value={riskPreset}
+                  onChange={(e) => setRiskPreset(e.target.value)}
+                >
+                  <option value="safe">Safe</option>
+                  <option value="standard">Standard</option>
+                  <option value="aggressive">Aggressive</option>
+                </select>
+              </label>
+
+              {/* Num sims */}
+              <label className="space-y-1 col-span-2">
+                <span className="text-xs text-slate-400">
+                  Number of simulations
                 </span>
-              </div>
+                <input
+                  type="number"
+                  min={1000}
+                  step={1000}
+                  className="w-full rounded-lg border border-slate-700 bg-slate-950/60 px-2 py-1.5 text-sm outline-none focus:border-sky-500"
+                  value={numSims}
+                  onChange={(e) => setNumSims(e.target.value)}
+                />
+              </label>
             </div>
 
-            <div className="grid gap-3 md:grid-cols-4">
-              <SummaryStat
-                label="Hit rate (backtest)"
-                value={`${summary.hit_rate_pct.toFixed(1)}%`}
-                hint="Historical hit rate for this slate & preset."
-              />
-              <SummaryStat
-                label="Average edge"
-                value={`${summary.avg_edge_pct.toFixed(1)}%`}
-                hint="Average model edge across recommended tickets."
-              />
-              <SummaryStat
-                label="Max edge ticket"
-                value={`${summary.max_edge_pct.toFixed(1)}%`}
-                hint="Strongest edge found in this batch."
-              />
-              <SummaryStat
-                label="Tickets generated"
-                value={summary.num_tickets.toString()}
-                hint="How many tickets the engine surfaced."
-              />
-            </div>
-          </div>
-
-          {/* Recommended tickets */}
-          <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4 md:p-5 shadow-lg shadow-slate-950/40">
-            <div className="mb-3 flex items-center justify-between gap-2">
-              <div>
-                <h2 className="text-sm font-semibold text-slate-100">
-                  Recommended tickets
-                </h2>
-                <p className="text-xs text-slate-400">
-                  These are the tickets the engine thinks are most interesting
-                  for this slate and risk preset.
-                </p>
-              </div>
-            </div>
-
-            {tickets.length === 0 ? (
-              <div className="rounded-xl border border-dashed border-slate-700 bg-slate-900/60 p-4 text-center text-sm text-slate-400">
-                No tickets returned in this sample payload.
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {tickets.map((ticket) => (
-                  <TicketCard
-                    key={ticket.ticket_id}
-                    ticket={ticket}
-                    riskPreset={riskPreset}
-                  />
-                ))}
-              </div>
-            )}
-          </div>
-        </section>
-      </main>
-    </div>
-  );
-}
-
-function SummaryStat(props: {
-  label: string;
-  value: string;
-  hint?: string;
-}) {
-  return (
-    <div className="flex flex-col justify-between rounded-xl border border-slate-800 bg-slate-950/40 px-3 py-2.5">
-      <span className="text-[0.7rem] text-slate-400">{props.label}</span>
-      <span className="mt-1 text-base font-semibold text-slate-50">
-        {props.value}
-      </span>
-      {props.hint && (
-        <span className="mt-0.5 text-[0.65rem] text-slate-500">
-          {props.hint}
-        </span>
-      )}
-    </div>
-  );
-}
-
-function TicketCard(props: {
-  ticket: ProfitEngineTicket;
-  riskPreset: RiskPreset;
-}) {
-  const { ticket, riskPreset } = props;
-
-  const riskColor =
-    ticket.risk_tier === "safe"
-      ? "bg-emerald-500/15 text-emerald-200 border-emerald-500/40"
-      : ticket.risk_tier === "aggro"
-        ? "bg-rose-500/15 text-rose-200 border-rose-500/40"
-        : "bg-amber-500/15 text-amber-200 border-amber-500/40";
-
-  return (
-    <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-3 text-xs text-slate-200 transition hover:border-slate-700 hover:bg-slate-950">
-      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-        <div className="space-y-0.5">
-          <div className="flex items-center gap-2">
-            <span className="text-sm font-semibold text-slate-50">
-              {ticket.label}
-            </span>
-            <span
-              className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[0.65rem] ${riskColor}`}
-            >
-              <ShieldCheck className="h-3 w-3" />
-              <span>{ticket.risk_tier.toUpperCase()}</span>
-            </span>
-          </div>
-          <div className="flex flex-wrap items-center gap-3 text-[0.7rem] text-slate-400">
-            <span className="inline-flex items-center gap-1">
-              <Ticket className="h-3 w-3 text-slate-500" />
-              Odds{" "}
-              <span className="font-semibold text-slate-100">
-                {ticket.payout_odds}
-              </span>
-            </span>
-            <span>
-              Engine label:{" "}
-              <span className="font-semibold text-slate-200">
-                {ticket.confidence_label}
-              </span>
-            </span>
-            <span>
-              Kelly:{" "}
-              <span className="font-semibold text-sky-200">
-                {(ticket.kelly_fraction * 100).toFixed(1)}%
-              </span>{" "}
-              · stake:{" "}
-              <span className="font-semibold text-sky-200">
-                {ticket.stake_suggestion_units.toFixed(2)}u
-              </span>
-            </span>
-          </div>
-        </div>
-
-        <div className="flex flex-col items-end gap-1 text-right text-[0.7rem]">
-          <span className="text-slate-400">
-            Edge:{" "}
-            <span className="font-semibold text-emerald-300">
-              {ticket.edge_pct.toFixed(1)}%
-            </span>
-          </span>
-          <span className="text-slate-500">
-            Model win:{" "}
-            <span className="font-semibold text-slate-200">
-              {ticket.model_win_prob_pct.toFixed(1)}%
-            </span>{" "}
-            vs implied{" "}
-            <span className="font-semibold text-slate-200">
-              {ticket.implied_win_prob_pct.toFixed(1)}%
-            </span>
-          </span>
-          <span className="text-[0.6rem] text-slate-500">
-            Tuned for preset:{" "}
-            <span className="uppercase text-slate-300">{riskPreset}</span>
-          </span>
-        </div>
-      </div>
-
-      {ticket.legs.length > 0 && (
-        <div className="mt-2 rounded-xl border border-slate-800 bg-slate-950/70 p-2">
-          <div className="mb-1 flex items-center justify-between gap-2 text-[0.7rem]">
-            <span className="font-semibold text-slate-200">
-              Legs ({ticket.legs.length})
-            </span>
-          </div>
-          <div className="space-y-1.5">
-            {ticket.legs.map((leg) => (
-              <div
-                key={leg.game_id + leg.selection}
-                className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-slate-900/80 px-2 py-1"
+            {/* Actions */}
+            <div className="flex flex-wrap items-center gap-3 pt-2">
+              <button
+                type="submit"
+                disabled={isSubmitting}
+                className="inline-flex items-center justify-center rounded-full bg-sky-500 px-4 py-2 text-sm font-medium text-slate-950 hover:bg-sky-400 disabled:opacity-60"
               >
-                <div className="space-y-0.5">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-[0.7rem] font-medium text-slate-100">
-                      {leg.game_label}
-                    </span>
-                    <span className="rounded-full bg-slate-800 px-1.5 py-0.5 text-[0.6rem] uppercase tracking-wide text-slate-300">
-                      {leg.market}
-                    </span>
-                  </div>
-                  <div className="flex flex-wrap items-center gap-2 text-[0.7rem] text-slate-300">
-                    <span className="font-semibold">{leg.selection}</span>
-                    <span className="text-slate-400">{leg.price}</span>
-                  </div>
-                </div>
-                <div className="text-right text-[0.65rem] text-slate-400">
-                  <div>
-                    Model:{" "}
-                    <span className="font-semibold text-slate-100">
-                      {leg.model_prob_pct.toFixed(1)}%
-                    </span>
-                  </div>
-                  <div>
-                    Implied:{" "}
-                    <span className="font-semibold text-slate-100">
-                      {leg.implied_prob_pct.toFixed(1)}%
-                    </span>
-                  </div>
-                  <div>
-                    Edge:{" "}
-                    <span className="font-semibold text-emerald-300">
-                      {leg.edge_pct.toFixed(1)}%
-                    </span>
-                  </div>
-                </div>
+                {isSubmitting ? "Queuing…" : "Run simulation"}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => fetchLatestResults()}
+                disabled={isLoadingResults}
+                className="inline-flex items-center justify-center rounded-full border border-slate-700 px-3 py-1.5 text-xs font-medium text-slate-200 hover:bg-slate-800 disabled:opacity-60"
+              >
+                {isLoadingResults ? "Refreshing…" : "Refresh latest result"}
+              </button>
+
+              {error && (
+                <p className="text-xs text-rose-400">
+                  {error}
+                </p>
+              )}
+            </div>
+
+            <p className="text-[11px] text-slate-500 pt-1">
+              Under the hood: POST → <code>/api/profit-engine</code> queues a{" "}
+              <code>sim_week</code> job into <code>C:\KB\Queue\High</code>. The
+              worker writes a result envelope into{" "}
+              <code>C:\KB\Engines\ProfitEngine\Results</code>, and{" "}
+              <code>/api/profit-engine/results</code> pulls the latest file.
+            </p>
+          </form>
+
+          {/* Results panel */}
+          <div className="space-y-4">
+            {/* Summary card */}
+            <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4 space-y-3">
+              <div className="flex items-center justify-between gap-3">
+                <h2 className="text-sm font-medium text-slate-100">
+                  Latest Profit Engine result
+                </h2>
+                {envelope && (
+                  <span className="rounded-full bg-emerald-500/10 px-3 py-1 text-[11px] text-emerald-300">
+                    {envelope.status === "done"
+                      ? "Status: done"
+                      : `Status: ${envelope.status}`}
+                  </span>
+                )}
               </div>
-            ))}
+
+              {summary ? (
+                <>
+                  <div className="grid grid-cols-2 gap-3 text-xs text-slate-300">
+                    <div className="space-y-1">
+                      <p className="font-medium">
+                        {summary.league} {summary.season} · Week {summary.week}
+                      </p>
+                      <p className="text-slate-400">
+                        {summary.num_games} games ·{" "}
+                        {summary.num_sims.toLocaleString()} sims
+                      </p>
+                    </div>
+                    <div className="space-y-1 text-right">
+                      <p className="text-slate-400">
+                        Hit rate:{" "}
+                        <span className="text-slate-50">
+                          {summary.hit_rate_pct.toFixed(1)}%
+                        </span>
+                      </p>
+                      <p className="text-slate-400">
+                        Avg edge:{" "}
+                        <span className="text-slate-50">
+                          {summary.avg_edge_pct.toFixed(1)}%
+                        </span>{" "}
+                        · Max edge:{" "}
+                        <span className="text-slate-50">
+                          {summary.max_edge_pct.toFixed(1)}%
+                        </span>
+                      </p>
+                      <p className="text-slate-400">
+                        Tickets:{" "}
+                        <span className="text-slate-50">
+                          {summary.num_tickets}
+                        </span>{" "}
+                        · Preset:{" "}
+                        <span className="text-slate-50">
+                          {summary.risk_preset}
+                        </span>
+                      </p>
+                    </div>
+                  </div>
+
+                  {envelope && (
+                    <p className="text-[11px] text-slate-500">
+                      Job ID: <code>{envelope.job_id}</code>
+                    </p>
+                  )}
+                </>
+              ) : (
+                <p className="text-xs text-slate-400">
+                  No Profit Engine results yet. Run a simulation on the left to
+                  generate a fresh envelope.
+                </p>
+              )}
+            </div>
+
+            {/* Ticket list */}
+            <div className="space-y-3">
+              {tickets.length === 0 && (
+                <div className="rounded-2xl border border-dashed border-slate-800 bg-slate-900/40 p-4 text-xs text-slate-400">
+                  No tickets in the latest envelope yet. Once the worker starts
+                  returning real simulations, they will show up here.
+                </div>
+              )}
+
+              {tickets.map((ticket) => (
+                <div
+                  key={ticket.ticket_id}
+                  className="space-y-3 rounded-2xl border border-slate-800 bg-slate-900/70 p-4"
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="space-y-1">
+                      <p className="text-sm font-medium text-slate-50">
+                        {ticket.label}
+                      </p>
+                      <p className="text-[11px] text-slate-400">
+                        Risk tier:{" "}
+                        <span className="text-slate-50">
+                          {ticket.risk_tier}
+                        </span>{" "}
+                        · Kelly:{" "}
+                        <span className="text-slate-50">
+                          {(ticket.kelly_fraction * 100).toFixed(1)}%
+                        </span>{" "}
+                        · Stake:{" "}
+                        <span className="text-slate-50">
+                          {ticket.stake_suggestion_units}u
+                        </span>
+                      </p>
+                    </div>
+                    <div className="text-right text-xs text-slate-300">
+                      <p>
+                        Odds:{" "}
+                        <span className="text-sky-300">
+                          {ticket.payout_odds}
+                        </span>
+                      </p>
+                      <p>
+                        Model win:{" "}
+                        <span className="text-slate-50">
+                          {ticket.model_win_prob_pct.toFixed(1)}%
+                        </span>
+                      </p>
+                      <p>
+                        Edge:{" "}
+                        <span className="text-emerald-300">
+                          {ticket.edge_pct.toFixed(1)}%
+                        </span>
+                      </p>
+                      <p className="text-[11px] text-slate-400">
+                        Confidence: {ticket.confidence_label}
+                      </p>
+                    </div>
+                  </div>
+
+                  {ticket.legs && ticket.legs.length > 0 ? (
+                    <ul className="space-y-1.5 text-xs text-slate-200">
+                      {ticket.legs.map((leg) => (
+                        <li
+                          key={`${leg.game_id}-${leg.market}-${leg.selection}`}
+                          className="flex items-start justify-between gap-3 rounded-xl bg-slate-950/60 px-3 py-2"
+                        >
+                          <div>
+                            <p className="font-medium">{leg.game_label}</p>
+                            <p className="text-[11px] text-slate-400">
+                              {leg.market.toUpperCase()} · {leg.selection} ·{" "}
+                              {leg.price}
+                            </p>
+                          </div>
+                          <div className="text-right text-[11px] text-slate-400">
+                            <p>
+                              Model:{" "}
+                              <span className="text-slate-50">
+                                {leg.model_prob_pct.toFixed(1)}%
+                              </span>
+                            </p>
+                            <p>
+                              Edge:{" "}
+                              <span className="text-emerald-300">
+                                {leg.edge_pct.toFixed(1)}%
+                              </span>
+                            </p>
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="text-[11px] text-slate-500">
+                      No legs attached yet in this stub. The real engine will
+                      populate legs for multi-leg tickets.
+                    </p>
+                  )}
+                </div>
+              ))}
+            </div>
           </div>
-        </div>
-      )}
-    </div>
+        </section>
+      </div>
+    </main>
   );
 }
+// END FILE: C:\KB\Web\knowledge-bank-site\src\app\parlay-pilot\page.tsx
