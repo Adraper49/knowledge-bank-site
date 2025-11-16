@@ -66,7 +66,7 @@ interface ProfitEngineResultEnvelope {
   };
 }
 
-// 🔌 Sample result envelope – mirrors docs/profit-engine-result-envelope-v1.json
+// Sample result envelope – mirrors docs/profit-engine-result-envelope-v1.json
 const sampleResult: ProfitEngineResultEnvelope = {
   version: "profit-engine-result-v1",
   engine: "profit-engine",
@@ -168,10 +168,64 @@ export default function ParlayPilotPage() {
   const [riskPreset, setRiskPreset] = useState<RiskPreset>(
     sampleResult.summary.risk_preset,
   );
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [lastJobId, setLastJobId] = useState<string | null>(null);
+  const [lastJobStatus, setLastJobStatus] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const result = sampleResult;
   const summary = result.summary;
   const tickets = result.tickets;
+
+  async function handleRunSim() {
+    try {
+      setIsSubmitting(true);
+      setErrorMessage(null);
+
+      const body = {
+        engine: "profit-engine",
+        job: {
+          type: "sim_week",
+          league: summary.league,
+          season: summary.season,
+          week: summary.week,
+          risk_preset: riskPreset,
+          preset: "nfl-default",
+          settings: {
+            num_simulations: summary.num_sims,
+            max_legs: 4,
+            min_edge_pct: summary.avg_edge_pct,
+            max_tickets: summary.num_tickets,
+          },
+          tags: ["parlay-pilot", "sim", "ui"],
+          meta: {
+            notes: "Queued from Parlay Pilot UI header button",
+          },
+        },
+      };
+
+      const res = await fetch("/api/profit-engine", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(`API error ${res.status}: ${text}`);
+      }
+
+      const data = await res.json();
+      setLastJobId(data.job_id ?? null);
+      setLastJobStatus(data.status ?? "queued");
+    } catch (err: unknown) {
+      const msg =
+        err instanceof Error ? err.message : "Unknown error queuing job.";
+      setErrorMessage(msg);
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-50">
@@ -206,9 +260,18 @@ export default function ParlayPilotPage() {
                 </span>
               </span>
             </div>
-            <button className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500 px-3 py-1.5 text-xs font-semibold text-emerald-950 shadow-lg shadow-emerald-500/30 hover:bg-emerald-400">
-              Run new sim
-              <ArrowRight className="h-3 w-3" />
+            <button
+              type="button"
+              onClick={handleRunSim}
+              disabled={isSubmitting}
+              className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500 px-3 py-1.5 text-xs font-semibold text-emerald-950 shadow-lg shadow-emerald-500/30 hover:bg-emerald-400 disabled:cursor-not-allowed disabled:bg-emerald-500/60"
+            >
+              {isSubmitting ? "Queuing..." : "Run new sim"}
+              <ArrowRight
+                className={`h-3 w-3 ${
+                  isSubmitting ? "opacity-60" : ""
+                }`}
+              />
             </button>
           </div>
         </header>
@@ -288,7 +351,7 @@ export default function ParlayPilotPage() {
         <section className="flex-1 space-y-4">
           {/* Sim summary card */}
           <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4 md:p-5 shadow-lg shadow-slate-950/40">
-            <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+            <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
               <div className="space-y-1">
                 <div className="inline-flex items-center gap-2 rounded-full bg-slate-900 px-2.5 py-1 text-[0.65rem] text-slate-300">
                   <TrendingUp className="h-3 w-3 text-emerald-400" />
@@ -312,6 +375,20 @@ export default function ParlayPilotPage() {
                     {result.status}
                   </span>
                 </span>
+                {lastJobId && (
+                  <span className="text-[0.65rem] text-slate-500">
+                    Last queued job:{" "}
+                    <span className="font-mono text-slate-200">
+                      {lastJobId}
+                    </span>{" "}
+                    ({lastJobStatus ?? "queued"})
+                  </span>
+                )}
+                {errorMessage && (
+                  <span className="text-[0.65rem] text-rose-400">
+                    {errorMessage}
+                  </span>
+                )}
                 <span className="text-[0.65rem] text-slate-500">
                   Engine version: {result.meta?.engine_version ?? "unknown"}
                 </span>
